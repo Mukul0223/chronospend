@@ -1,0 +1,116 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum RecurrenceFrequency {
+  daily
+  weekly
+  monthly
+}
+
+enum ExpenseSource {
+  preset_tap
+  one_off
+}
+
+model User {
+  id              String   @id
+  defaultCurrency String   @default("USD") @map("default_currency") @db.Char(3)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  categories Category[]
+  presets    Preset[]
+  expenses   ExpenseEntry[]
+  notes      DailyNote[]
+
+  @@map("users")
+}
+
+model Category {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user     User           @relation(fields: [userId], references: [id])
+  presets  Preset[]
+  expenses ExpenseEntry[]
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("categories")
+}
+
+model Preset {
+  id                  String               @id @default(uuid())
+  userId              String               @map("user_id")
+  name                String
+  amount              Decimal              @db.Decimal(10, 2)
+  categoryId          String?              @map("category_id")
+  recurrenceFrequency RecurrenceFrequency? @map("recurrence_frequency")
+  recurrenceStartDate DateTime?            @map("recurrence_start_date") @db.Date
+  recurrenceEndDate   DateTime?            @map("recurrence_end_date") @db.Date
+  archivedAt          DateTime?            @map("archived_at")
+  createdAt           DateTime             @default(now()) @map("created_at")
+
+  user     User             @relation(fields: [userId], references: [id])
+  category Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  entries  ExpenseEntry[]
+  skips    RecurrenceSkip[]
+
+  @@index([userId])
+  @@index([userId, archivedAt])
+  @@map("presets")
+}
+
+model RecurrenceSkip {
+  id        String   @id @default(uuid())
+  presetId  String   @map("preset_id")
+  skipDate  DateTime @map("skip_date") @db.Date
+  createdAt DateTime @default(now()) @map("created_at")
+
+  preset Preset @relation(fields: [presetId], references: [id], onDelete: Cascade)
+
+  @@unique([presetId, skipDate])
+  @@map("recurrence_skips")
+}
+
+model ExpenseEntry {
+  id          String        @id @default(uuid())
+  userId      String        @map("user_id")
+  date        DateTime      @db.Date
+  amount      Decimal       @db.Decimal(10, 2)
+  description String
+  categoryId  String?       @map("category_id")
+  presetId    String?       @map("preset_id")
+  source      ExpenseSource
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  user     User      @relation(fields: [userId], references: [id])
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  preset   Preset?   @relation(fields: [presetId], references: [id])
+
+  @@index([userId, date])
+  @@index([userId, categoryId])
+  @@map("expense_entries")
+}
+
+model DailyNote {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  date      DateTime @db.Date
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, date])
+  @@map("daily_notes")
+}
